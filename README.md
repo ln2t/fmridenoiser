@@ -44,10 +44,6 @@ fmridenoiser /path/to/fmriprep /path/to/fmridenoiser_output participant --strate
 
 # Using scrubbing5 strategy (includes FD censoring)
 fmridenoiser /path/to/fmriprep /path/to/fmridenoiser_output participant --strategy scrubbing5
-
-# With custom fMRIPrep location
-fmridenoiser /path/to/fmriprep /path/to/fmridenoiser_output participant \
-    --strategy gs_csfwm_12p
 ```
 
 ## Denoising Strategies
@@ -88,6 +84,10 @@ connectomix /path/to/fmridenoiser_output /path/to/connectomix_output participant
 - **Denoising strategies**: Wang et al. (2024). Benchmarking fMRI denoising strategies for functional connectomics.
 - **Motion scrubbing**: Power et al. (2012). Spurious but systematic correlations in functional connectivity MRI networks arise from subject motion. *NeuroImage*, 59, 2142-2154.
 
+## Acknowledgments
+
+fmridenoiser is built on Nilearn, a powerful Python library for analyzing neuroimaging data. For questions, refer to the [Nilearn documentation](https://nilearn.github.io/).
+
 ## License
 
-MIT License
+AGPLv3 License - See [LICENSE](LICENSE) file for details.
