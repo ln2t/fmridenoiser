@@ -4,17 +4,13 @@
 
 **fMRI Denoising BIDS App for fMRIPrep Outputs**
 
+[Features](#features) | [Installation](#installation) | [Quick Start](#quick-start) | [Strategies](#denoising-strategies) | [References](#references)
+
 </div>
+
+## Overview
 
 fmridenoiser applies denoising (confound regression + temporal filtering) and optional FD-based temporal censoring to fMRI data preprocessed with [fMRIPrep](https://fmriprep.org). It produces BIDS-compliant denoised outputs that can be used as input to downstream tools like [connectomix](https://github.com/ln2t/connectomix) (connectomix version 4.0.0 and onwards).
-
-<div align="center">
-
-## Table of Contents
-
-[Features](#features) | [Installation](#installation) | [Quick Start](#quick-start) | [Strategies](#denoising-strategies) | [Output](#output-structure) | [References](#references)
-
-</div>
 
 ## Features
 
