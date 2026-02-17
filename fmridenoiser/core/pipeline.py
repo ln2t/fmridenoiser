@@ -87,9 +87,6 @@ def run_denoising_pipeline(
         'censored': [],
         'masks': [],
     }
-    
-    # Track processed subjects for mask copying
-    processed_subjects = set()
 
     with timer(logger, "Participant-level denoising"):
         # === Step 1: Setup ===
@@ -195,6 +192,9 @@ def run_denoising_pipeline(
         # === Step 4: Process each functional file ===
         log_section(logger, "Processing")
 
+        current_subject = None
+        current_session = None
+
         for i, (func_path, confounds_path) in enumerate(
             zip(files['func'], files['confounds'])
         ):
@@ -212,8 +212,19 @@ def run_denoising_pipeline(
 
             # Track subject for mask copying
             subject_id = file_entities.get('sub')
-            if subject_id:
-                processed_subjects.add((subject_id, file_entities.get('ses')))
+            session_id = file_entities.get('ses')
+            
+            # Copy masks when transitioning to a new subject/session
+            if (current_subject is not None and 
+                (subject_id != current_subject or session_id != current_session)):
+                _copy_masks_for_subject(
+                    fmriprep_dir, output_dir, 
+                    current_subject, current_session, 
+                    outputs, logger
+                )
+            
+            current_subject = subject_id
+            current_session = session_id
 
             with timer(logger, f"  Subject {file_entities.get('sub', 'unknown')}"):
                 # --- Resample if needed ---
@@ -331,41 +342,13 @@ def run_denoising_pipeline(
                     resampling_info=resampling_info,
                 )
 
-        # === Step 5: Copy brain masks from fMRIPrep ===
-        if fmriprep_dir:
-            log_section(logger, "Brain Mask Copying")
-            
-            for subject_id, session_id in processed_subjects:
-                try:
-                    # Find brain masks
-                    brain_masks = find_brain_masks(
-                        fmriprep_dir,
-                        subject_id,
-                        session=session_id,
-                        logger=logger,
-                    )
-                    
-                    # Copy masks if found
-                    if brain_masks['anat'] or brain_masks['func']:
-                        copied = copy_brain_masks(
-                            brain_masks,
-                            output_dir,
-                            subject_id,
-                            session=session_id,
-                            logger=logger,
-                        )
-                        n_copied = len(copied['anat']) + len(copied['func'])
-                        if n_copied > 0:
-                            outputs['masks'].extend(copied['anat'] + copied['func'])
-                            session_str = f" ses-{session_id}" if session_id else ""
-                            logger.info(f"Copied {n_copied} brain mask(s) for sub-{subject_id}{session_str}")
-                    else:
-                        session_str = f" ses-{session_id}" if session_id else ""
-                        logger.debug(f"No brain masks found for sub-{subject_id}{session_str}")
-                        
-                except Exception as e:
-                    session_str = f" ses-{session_id}" if session_id else ""
-                    logger.warning(f"Failed to copy brain masks for sub-{subject_id}{session_str}: {e}")
+        # Copy masks for the last subject processed
+        if current_subject is not None and fmriprep_dir:
+            _copy_masks_for_subject(
+                fmriprep_dir, output_dir,
+                current_subject, current_session,
+                outputs, logger
+            )
 
         # === Summary ===
         log_section(logger, "Summary")
@@ -710,6 +693,60 @@ def _get_output_path(
 
     filename = "_".join(parts) + extension
     return sub_dir / filename
+
+
+def _copy_masks_for_subject(
+    fmriprep_dir: Optional[Path],
+    output_dir: Path,
+    subject_id: str,
+    session_id: Optional[str],
+    outputs: Dict[str, List[Path]],
+    logger: logging.Logger,
+) -> None:
+    """Copy brain masks from fMRIPrep for a specific subject.
+    
+    Args:
+        fmriprep_dir: Path to fMRIPrep derivatives directory
+        output_dir: Output directory
+        subject_id: Subject ID (without 'sub-' prefix)
+        session_id: Optional session ID (without 'ses-' prefix)
+        outputs: Dictionary to accumulate output paths
+        logger: Logger instance
+    """
+    if not fmriprep_dir:
+        return
+    
+    try:
+        # Find brain masks for this subject/session
+        brain_masks = find_brain_masks(
+            fmriprep_dir,
+            subject_id,
+            session=session_id,
+            logger=logger,
+        )
+        
+        # Copy masks if found
+        if brain_masks['anat'] or brain_masks['func']:
+            copied = copy_brain_masks(
+                brain_masks,
+                output_dir,
+                subject_id,
+                session=session_id,
+                logger=logger,
+            )
+            n_copied = len(copied['anat']) + len(copied['func'])
+            if n_copied > 0:
+                outputs['masks'].extend(copied['anat'] + copied['func'])
+                session_str = f" ses-{session_id}" if session_id else ""
+                logger.info(f"Copied {n_copied} brain mask(s) for sub-{subject_id}{session_str}")
+        else:
+            session_str = f" ses-{session_id}" if session_id else ""
+            logger.debug(f"No brain masks found for sub-{subject_id}{session_str}")
+            
+    except Exception as e:
+        session_str = f" ses-{session_id}" if session_id else ""
+        logger.warning(f"Failed to copy brain masks for sub-{subject_id}{session_str}: {e}")
+
 
 def _is_fmriprep_dir(layout, path: Path, logger: Optional[logging.Logger] = None) -> bool:
     """Check if a directory is an fMRIPrep derivatives directory using BIDSLayout.
