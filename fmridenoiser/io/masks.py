@@ -189,14 +189,11 @@ def resample_masks_to_reference(
         try:
             mask_img = nib.load(anat_mask)
             
-            # Create output path with '_resampled' suffix
-            stem = anat_mask.stem  # Remove .nii from filename
-            if stem.endswith('.nii'):
-                stem = stem[:-4]
-            resampled_path = anat_mask.parent / f"{stem}_resampled.nii.gz"
+            # Resample in-place (overwrite the copied mask)
+            resampled_path = anat_mask
             
             if logger:
-                logger.info(f"Resampling anatomical mask: {anat_mask.name} → {resampled_path.name}")
+                logger.info(f"Resampling anatomical mask: {anat_mask.name}")
             
             # Resample using nearest neighbor for binary masks
             resampled = nl_image.resample_to_img(
@@ -227,14 +224,11 @@ def resample_masks_to_reference(
         try:
             mask_img = nib.load(func_mask)
             
-            # Create output path with '_resampled' suffix
-            stem = func_mask.stem  # Remove .nii from filename
-            if stem.endswith('.nii'):
-                stem = stem[:-4]
-            resampled_path = func_mask.parent / f"{stem}_resampled.nii.gz"
+            # Resample in-place (overwrite the copied mask)
+            resampled_path = func_mask
             
             if logger:
-                logger.info(f"Resampling functional mask: {func_mask.name} → {resampled_path.name}")
+                logger.info(f"Resampling functional mask: {func_mask.name}")
             
             # Resample using nearest neighbor for binary masks
             resampled = nl_image.resample_to_img(

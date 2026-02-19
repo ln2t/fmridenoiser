@@ -72,7 +72,7 @@ Brain masks from fMRIPrep are copied to the output directory for quality assuran
 1. **Functional images** are resampled to a reference geometry
 2. **Brain masks** are automatically resampled on-the-fly to match the reference geometry using nearest-neighbor interpolation
 3. Both resampled images and masks maintain **binary integrity** (values remain 0 or 1 after resampling)
-4. **Resampled masks** are saved with `_resampled.nii.gz` suffix in the masks directory for traceability
+4. Copied masks are **resampled in-place** (original fMRIPrep masks are never modified)
 
 This ensures spatial consistency between your functional data and brain masks, which is critical for:
 - **Connectivity analysis** (downstream tools like connectomix)
