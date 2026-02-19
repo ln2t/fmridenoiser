@@ -24,7 +24,7 @@ from fmridenoiser.config.loader import save_config
 from fmridenoiser.io.bids import create_bids_layout, query_participant_files
 from fmridenoiser.io.paths import create_dataset_description, validate_bids_dir
 from fmridenoiser.io.readers import get_repetition_time
-from fmridenoiser.io.masks import find_brain_masks, copy_brain_masks
+from fmridenoiser.io.masks import find_brain_masks, copy_brain_masks, resample_masks_to_reference
 from fmridenoiser.preprocessing.resampling import (
     check_geometric_consistency,
     resample_to_reference,
@@ -220,7 +220,8 @@ def run_denoising_pipeline(
                 _copy_masks_for_subject(
                     fmriprep_dir, output_dir, 
                     current_subject, current_session, 
-                    outputs, logger
+                    outputs, logger,
+                    reference_img=reference_img if not is_consistent else None
                 )
             
             current_subject = subject_id
@@ -347,7 +348,8 @@ def run_denoising_pipeline(
             _copy_masks_for_subject(
                 fmriprep_dir, output_dir,
                 current_subject, current_session,
-                outputs, logger
+                outputs, logger,
+                reference_img=reference_img if not is_consistent else None
             )
 
         # === Summary ===
@@ -702,8 +704,11 @@ def _copy_masks_for_subject(
     session_id: Optional[str],
     outputs: Dict[str, List[Path]],
     logger: logging.Logger,
+    reference_img: Optional[nib.Nifti1Image] = None,
 ) -> None:
     """Copy brain masks from fMRIPrep for a specific subject.
+    
+    Optionally resamples masks to reference image geometry if provided.
     
     Args:
         fmriprep_dir: Path to fMRIPrep derivatives directory
@@ -712,6 +717,8 @@ def _copy_masks_for_subject(
         session_id: Optional session ID (without 'ses-' prefix)
         outputs: Dictionary to accumulate output paths
         logger: Logger instance
+        reference_img: Optional reference image for resampling masks to reference geometry.
+                      If provided, copied masks will be resampled. If None, masks are only copied.
     """
     if not fmriprep_dir:
         return
@@ -739,6 +746,26 @@ def _copy_masks_for_subject(
                 outputs['masks'].extend(copied['anat'] + copied['func'])
                 session_str = f" ses-{session_id}" if session_id else ""
                 logger.info(f"Copied {n_copied} brain mask(s) for sub-{subject_id}{session_str}")
+                
+                # Resample masks to reference geometry if provided
+                if reference_img is not None:
+                    log_section(logger, f"Resampling Brain Masks for sub-{subject_id}{session_str}")
+                    resampled = resample_masks_to_reference(
+                        copied,
+                        reference_img,
+                        output_dir,
+                        subject_id,
+                        session=session_id,
+                        logger=logger,
+                    )
+                    n_resampled = len(resampled['anat']) + len(resampled['func'])
+                    if n_resampled > 0:
+                        outputs['masks'].extend(resampled['anat'] + resampled['func'])
+                        logger.info(f"Resampled {n_resampled} brain mask(s) to reference geometry")
+                    else:
+                        logger.warning("Failed to resample brain masks - using copied versions only")
+                else:
+                    logger.debug(f"No resampling needed (all images have consistent geometry)")
         else:
             session_str = f" ses-{session_id}" if session_id else ""
             logger.debug(f"No brain masks found for sub-{subject_id}{session_str}")

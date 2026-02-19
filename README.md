@@ -17,6 +17,7 @@ fmridenoiser applies denoising (confound regression + temporal filtering) and op
 - **9 predefined denoising strategies** based on neuroimaging best practices (Wang et al. 2024)
 - **FD-based motion censoring** with configurable threshold, extension, and segment filtering (scrubbing)
 - **Geometric consistency** checking and resampling across subjects
+- **Automatic brain mask resampling** to reference geometry when functional images are resampled
 - **BIDS-compliant** outputs with JSON sidecars for provenance tracking
 - **HTML quality reports** with denoising histograms, confound time series, and FD traces
 - **Brain mask copying** from fMRIPrep outputs (both anatomical and functional masks)
@@ -63,6 +64,20 @@ fmridenoiser /path/to/fmriprep /path/to/fmridenoiser_output participant --strate
 ## Processing Order
 
 Temporal censoring (volume removal) is applied **after** denoising. Denoising via confound regression and temporal filtering (`nilearn.image.clean_img`) is performed on the full time series first, then volumes are removed based on motion thresholds if censoring is enabled.
+
+## Brain Mask Handling
+
+Brain masks from fMRIPrep are copied to the output directory for quality assurance and downstream analysis. When geometric inconsistencies are detected across the dataset (varying voxel dimensions or field of view), the following sequence is applied:
+
+1. **Functional images** are resampled to a reference geometry
+2. **Brain masks** are automatically resampled on-the-fly to match the reference geometry using nearest-neighbor interpolation
+3. Both resampled images and masks maintain **binary integrity** (values remain 0 or 1 after resampling)
+4. **Resampled masks** are saved with `_resampled.nii.gz` suffix in the masks directory for traceability
+
+This ensures spatial consistency between your functional data and brain masks, which is critical for:
+- **Connectivity analysis** (downstream tools like connectomix)
+- **Group-level statistics** (requires aligned geometries)
+- **Quality control** (masked reports accurately reflect processed data)
 
 ## Integration with connectomix
 
