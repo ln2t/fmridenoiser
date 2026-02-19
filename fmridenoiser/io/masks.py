@@ -2,10 +2,11 @@
 
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 import logging
 
 import nibabel as nib
+from nilearn import image as nl_image
 
 
 def find_brain_masks(
@@ -151,3 +152,113 @@ def copy_brain_masks(
         logger.info(f"Copied {total_copied} brain mask(s) to {masks_dir}")
 
     return copied_masks
+
+
+def resample_masks_to_reference(
+    copied_masks: Dict[str, List[Path]],
+    reference_img: Union[Path, nib.Nifti1Image],
+    output_dir: Path,
+    subject_id: str,
+    session: Optional[str] = None,
+    logger: Optional[logging.Logger] = None,
+) -> Dict[str, List[Path]]:
+    """Resample copied brain masks to reference image geometry.
+
+    Resamples both anatomical and functional masks to match the reference image's
+    resolution and orientation. This ensures spatial consistency with the resampled
+    functional data.
+
+    Args:
+        copied_masks: Dictionary with 'anat' and 'func' keys containing mask file paths.
+        reference_img: Reference image (path or NIfTI image) that masks will be resampled to.
+        output_dir: Root output directory (masks will be saved to same location with '_resampled' suffix).
+        subject_id: Subject ID (without 'sub-' prefix).
+        session: Optional session ID (without 'ses-' prefix).
+        logger: Optional logger instance.
+
+    Returns:
+        Dictionary with 'anat' and 'func' keys containing resampled mask file paths.
+    """
+    if isinstance(reference_img, (str, Path)):
+        reference_img = nib.load(reference_img)
+
+    resampled_masks = {'anat': [], 'func': []}
+    
+    # Resample anatomical masks
+    for anat_mask in copied_masks['anat']:
+        try:
+            mask_img = nib.load(anat_mask)
+            
+            # Resample in-place (overwrite the copied mask)
+            resampled_path = anat_mask
+            
+            if logger:
+                logger.info(f"Resampling anatomical mask: {anat_mask.name}")
+            
+            # Resample using nearest neighbor for binary masks
+            resampled = nl_image.resample_to_img(
+                mask_img, reference_img,
+                interpolation='nearest',
+                force_resample=True,
+                copy_header=True
+            )
+            
+            # Ensure binary mask remains binary (0 or 1)
+            resampled_data = resampled.get_fdata()
+            resampled_data = (resampled_data > 0.5).astype(int)
+            resampled_affine = resampled.affine
+            resampled_img = nib.Nifti1Image(resampled_data, resampled_affine, resampled.header)
+            
+            nib.save(resampled_img, resampled_path)
+            resampled_masks['anat'].append(resampled_path)
+            
+            if logger:
+                logger.debug(f"  Resampled to shape: {resampled_data.shape}")
+                
+        except Exception as e:
+            if logger:
+                logger.warning(f"Failed to resample anatomical mask {anat_mask.name}: {e}")
+
+    # Resample functional masks
+    for func_mask in copied_masks['func']:
+        try:
+            mask_img = nib.load(func_mask)
+            
+            # Resample in-place (overwrite the copied mask)
+            resampled_path = func_mask
+            
+            if logger:
+                logger.info(f"Resampling functional mask: {func_mask.name}")
+            
+            # Resample using nearest neighbor for binary masks
+            resampled = nl_image.resample_to_img(
+                mask_img, reference_img,
+                interpolation='nearest',
+                force_resample=True,
+                copy_header=True
+            )
+            
+            # Ensure binary mask remains binary (0 or 1)
+            resampled_data = resampled.get_fdata()
+            resampled_data = (resampled_data > 0.5).astype(int)
+            resampled_affine = resampled.affine
+            resampled_img = nib.Nifti1Image(resampled_data, resampled_affine, resampled.header)
+            
+            nib.save(resampled_img, resampled_path)
+            resampled_masks['func'].append(resampled_path)
+            
+            if logger:
+                logger.debug(f"  Resampled to shape: {resampled_data.shape}")
+                
+        except Exception as e:
+            if logger:
+                logger.warning(f"Failed to resample functional mask {func_mask.name}: {e}")
+
+    if logger:
+        total_resampled = len(resampled_masks['anat']) + len(resampled_masks['func'])
+        if total_resampled > 0:
+            logger.info(f"Resampled {total_resampled} brain mask(s) to reference geometry")
+        else:
+            logger.warning("No masks were successfully resampled")
+
+    return resampled_masks
